@@ -1,0 +1,20 @@
+# add configuration options
+Import( '*' )
+
+SConscript ( '#/config/libraryConfig.py' )
+Import('standardLibFinder', 'standardLibConfig')
+
+opts.Add( 'FLYCAPTURE_PATH', 'Path to the PGR flycapture library and header files' )
+
+libName = "FLYCAPTURE"
+
+
+compileSettings =  [{} , "PGRFlyCapture.h", "C++"]
+libFinder = standardLibFinder(libName,compileSettings)
+
+configHelper = standardLibConfig(libName, libFinder)
+have_flycapture = configHelper.haveLib()
+flycapture_options = configHelper.getLibraryOptions()
+
+# export results
+Export( [ 'have_flycapture', 'flycapture_options' ] )
