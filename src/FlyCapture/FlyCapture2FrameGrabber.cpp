@@ -64,6 +64,7 @@ using namespace Ubitrack;
 using namespace Ubitrack::Vision;
 
 
+
 namespace {
 	class FlyCaptureModeMap 
 		: public std::map< std::string, FlyCapture2::VideoMode >
@@ -152,8 +153,8 @@ protected:
 	volatile bool m_bStop;
 
 	// the ports
-	Dataflow::PushSupplier< ImageMeasurement > m_outPort;
-	Dataflow::PushSupplier< ImageMeasurement > m_colorOutPort;
+	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_outPort;
+	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_colorOutPort;
 };
 
 
@@ -279,10 +280,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			// m_outPort.send( Vision::ImageMeasurement( timeStamp, pSmallImage ) );
 
 			LOG4CPP_DEBUG( logger, "sending" );
-			m_outPort.send( Ubitrack::Vision::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+			m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 			
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Vision::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_GRAY2RGB, 3 ) ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_GRAY2RGB, 3 ) ) );
 		} 
 		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
@@ -290,9 +291,9 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			rawImage.widthStep = image.GetStride();
 
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Vision::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 			if ( m_outPort.isConnected() )
-				m_outPort.send( Vision::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
 		}
 	}
 

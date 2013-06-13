@@ -47,11 +47,11 @@
 #include <utVision/Image.h>
 #include <opencv/cv.h>
 
-#include <Ubitrack/Util/CleanWindows.h>
+#include <utUtil/CleanWindows.h>
 #ifndef _WIN32_WINNT
 	#define _WIN32_WINNT WINVER
 #endif
-#include <highgui.h>
+#include <opencv/highgui.h>
 #include <PGRFlyCapture.h>
 
 // get a logger
@@ -93,7 +93,7 @@ namespace {
 			(*this)[ "7.5" ] = FLYCAPTURE_FRAMERATE_7_5;
 			(*this)[ "15" ] = FLYCAPTURE_FRAMERATE_15;
 			(*this)[ "30" ] = FLYCAPTURE_FRAMERATE_30;
-			(*this)[ "50" ] = FLYCAPTURE_FRAMERATE_50;
+			//(*this)[ "50" ] = FLYCAPTURE_FRAMERATE_50;
 			(*this)[ "60" ] = FLYCAPTURE_FRAMERATE_60;
 			(*this)[ "120" ] = FLYCAPTURE_FRAMERATE_120;
 			(*this)[ "240" ] = FLYCAPTURE_FRAMERATE_240;
@@ -149,8 +149,8 @@ protected:
 	volatile bool m_bStop;
 
 	// the ports
-	Dataflow::PushSupplier< ImageMeasurement > m_outPort;
-	Dataflow::PushSupplier< ImageMeasurement > m_colorOutPort;
+	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_outPort;
+	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_colorOutPort;
 };
 
 
@@ -250,7 +250,7 @@ void FlyCaptureFrameGrabber::ThreadProc()
 			// m_outPort.send( Vision::ImageMeasurement( timeStamp, pSmallImage ) );
 
 			LOG4CPP_DEBUG( logger, "sending" );
-			m_outPort.send( Ubitrack::Vision::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+			m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 		} 
 		else if ( image.pixelFormat == FLYCAPTURE_RGB8 )
 		{
@@ -258,9 +258,9 @@ void FlyCaptureFrameGrabber::ThreadProc()
 			rawImage.widthStep = image.iRowInc;
 
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Vision::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 			if ( m_outPort.isConnected() )
-				m_outPort.send( Vision::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
 		}
 	}
 
