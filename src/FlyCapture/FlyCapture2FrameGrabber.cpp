@@ -88,6 +88,35 @@ namespace {
 	};
 	static FlyCaptureModeMap flyCaptureModeMap;
 
+	class FlyCapturePixelFormatMap 
+		: public std::map< std::string, FlyCapture2::PixelFormat >
+	{
+	public:
+		FlyCapturePixelFormatMap()
+		{
+			using namespace FlyCapture2;
+			
+			(*this)[ "MONO8" ] = PIXEL_FORMAT_MONO8;
+			(*this)[ "411YUV8" ] = PIXEL_FORMAT_411YUV8;
+			(*this)[ "422YUV8" ] = PIXEL_FORMAT_422YUV8;
+			(*this)[ "444YUV8" ] = PIXEL_FORMAT_444YUV8;
+			(*this)[ "RGB8" ] = PIXEL_FORMAT_RGB8;
+			(*this)[ "MONO16" ] = PIXEL_FORMAT_MONO16;
+			(*this)[ "RGB16" ] = PIXEL_FORMAT_RGB16;
+			(*this)[ "S_MONO16" ] = PIXEL_FORMAT_S_MONO16;
+			(*this)[ "S_RGB16" ] = PIXEL_FORMAT_S_RGB16;
+			(*this)[ "RAW8" ] = PIXEL_FORMAT_RAW8;
+			(*this)[ "RAW16" ] = PIXEL_FORMAT_RAW16;
+			(*this)[ "MONO12" ] = PIXEL_FORMAT_MONO12;
+			(*this)[ "RAW12" ] = PIXEL_FORMAT_RAW12;
+			(*this)[ "BGR" ] = PIXEL_FORMAT_BGR;
+			(*this)[ "BGRU" ] = PIXEL_FORMAT_BGRU;
+			(*this)[ "RGB" ] = PIXEL_FORMAT_RGB;
+			(*this)[ "RGBU" ] = PIXEL_FORMAT_RGBU;
+		}
+	};
+	static FlyCapturePixelFormatMap flyCapturePixelFormatMap;
+
 	class FlyCaptureFrameRateMap 
 		: public std::map< std::string, FlyCapture2::FrameRate >
 	{
@@ -139,6 +168,23 @@ protected:
 	// fly capture stuff
 	FlyCapture2::VideoMode m_videoMode;
 	FlyCapture2::FrameRate m_frameRate;
+	FlyCapture2::PixelFormat m_pixelFormat;
+
+	// the serial number
+	int m_cameraSerialNumber;
+
+	// or the bus index
+	int m_cameraBusIndex;
+
+
+	// trigger flash
+	bool m_triggerFlash;
+
+	// gain
+	double m_gainDB;
+
+	// shutter
+	double m_shutterMS;
 
 	// shift timestamps (ms)
 	int m_timeOffset;
@@ -162,8 +208,14 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 	: Dataflow::Component( sName )
 	, m_videoMode( FlyCapture2::NUM_VIDEOMODES )
 	, m_frameRate( FlyCapture2::NUM_FRAMERATES )
+	, m_pixelFormat( FlyCapture2::NUM_PIXEL_FORMATS )
 	, m_timeOffset( 0 )
+	, m_cameraSerialNumber( -1 )
+	, m_cameraBusIndex( -1 )
+	, m_gainDB( -1 ) // -1 is auto
+	, m_shutterMS( -1 ) // -1 is auto
 	, m_bStop( false )
+	, m_triggerFlash( false )
 	, m_outPort( "Output", *this )
 	, m_colorOutPort( "ColorOutput", *this )
 {
@@ -171,7 +223,21 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 
 	// if you have problems with the ipp from flycapture
 	// cvUseOptimized( 0 );
-	
+
+	subgraph->m_DataflowAttributes.getAttributeData( "cameraBusIndex", m_cameraBusIndex );
+	subgraph->m_DataflowAttributes.getAttributeData( "cameraSerialNumber", m_cameraSerialNumber );
+	if ((m_cameraBusIndex == -1) && (m_cameraSerialNumber == -1))
+		UBITRACK_THROW( "Need to specify either cameraBusIndex OR cameraSerialNumber" );
+
+	subgraph->m_DataflowAttributes.getAttributeData( "gainDB", m_gainDB );
+	subgraph->m_DataflowAttributes.getAttributeData( "shutterMS", m_shutterMS );
+
+	if ( subgraph->m_DataflowAttributes.getAttributeString( "triggerFlash" ) == "true")
+	{
+		m_triggerFlash = true;
+	}
+
+
 	if ( subgraph->m_DataflowAttributes.hasAttribute( "videoMode" ) )
 	{
 		std::string sVideoMode = subgraph->m_DataflowAttributes.getAttributeString( "videoMode" );
@@ -179,6 +245,14 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 			UBITRACK_THROW( "unknown video mode: \"" + sVideoMode + "\"" );
 		m_videoMode = flyCaptureModeMap[ sVideoMode ];
 	}
+
+	//if ( subgraph->m_DataflowAttributes.hasAttribute( "pixelFormat" ) )
+	//{
+	//	std::string sPixelFormat = subgraph->m_DataflowAttributes.getAttributeString( "pixelFormat" );
+	//	if ( flyCapturePixelFormatMap.find( sPixelFormat ) == flyCapturePixelFormatMap.end() )
+	//		UBITRACK_THROW( "unknown pixel format: \"" + sPixelFormat + "\"" );
+	//	m_pixelFormat = flyCapturePixelFormatMap[ sPixelFormat ];
+	//}
 
 	if ( subgraph->m_DataflowAttributes.hasAttribute( "frameRate" ) )
 	{
@@ -222,13 +296,30 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		LOG4CPP_ERROR( logger, "No PointGrey cameras found!" );
 		return;
 	}
-	
+
 	PGRGuid guid;
-	if ( busMgr.GetCameraFromIndex( 0, &guid ) != PGRERROR_OK )
-	{
-		LOG4CPP_ERROR( logger, "Error in FlyCapture2::BusManager::GetCameraFromIndex" );
-		return;
+
+	if (m_cameraSerialNumber >= 0) {
+		if ( busMgr.GetCameraFromSerialNumber((unsigned int) m_cameraSerialNumber, &guid) != PGRERROR_OK )
+		{
+			LOG4CPP_ERROR( logger, "Error in FlyCapture2::BusManager::GetCameraFromSerialNumber" );
+			return;
+		}
+	} else if (m_cameraBusIndex >= 0) {
+		if ( busMgr.GetCameraFromIndex( (unsigned int) m_cameraBusIndex, &guid ) != PGRERROR_OK )
+		{
+			LOG4CPP_ERROR( logger, "Error in FlyCapture2::BusManager::GetCameraFromIndex" );
+			return;
+		}	
+	} else {
+		// should never happen ...
+		if ( busMgr.GetCameraFromIndex( 0, &guid ) != PGRERROR_OK )
+		{
+			LOG4CPP_ERROR( logger, "Error in FlyCapture2::BusManager::GetCameraFromIndex" );
+			return;
+		}	
 	}
+
 
 	Camera cam;
 	if ( cam.Connect( &guid ) != PGRERROR_OK )
@@ -242,7 +333,66 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		LOG4CPP_INFO( logger, "Setting framerate and videomode" );
 		if ( cam.SetVideoModeAndFrameRate( m_videoMode, m_frameRate ) != PGRERROR_OK )
 			LOG4CPP_WARN( logger, "Error in FlyCapture2::Camera::SetVideoModeAndFrameRate" );
+
 	}
+
+	if(m_triggerFlash) {
+		// set GPIO to output
+		cam.WriteRegister(0x11f8, 0xe0000000);
+		// set GPIO signal to delay 0 and duration 2 (last 6 bytes)
+		cam.WriteRegister(0x1500, 0x83000003);
+	} else {
+		// how to turn it off?!
+		//cam.WriteRegister(0x1500, 0x83000000);	
+	}
+
+	// set gain
+	if(m_gainDB < 0) {
+		Property prop;
+		prop.type = GAIN;
+		prop.onePush = true;
+		prop.onOff = true;
+		prop.autoManualMode = true;
+		prop.valueA = 0;
+		prop.valueB = 0;
+		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+			LOG4CPP_ERROR( logger, "Error setting auto Gain." );
+	} else {
+		Property prop;
+		prop.type = GAIN;
+		prop.onePush = false;
+		prop.onOff = true;
+		prop.autoManualMode = false;
+		prop.absControl = true;
+		prop.absValue = (float)m_gainDB;
+		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+			LOG4CPP_ERROR( logger, "Error setting manual Gain." );
+	}
+
+	// set shutter
+	if(m_shutterMS < 0) {
+		Property prop;
+		prop.type = SHUTTER;
+		prop.onePush = true;
+		prop.onOff = true;
+		prop.autoManualMode = true;
+		prop.valueA = 0;
+		prop.valueB = 0;
+		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+			LOG4CPP_ERROR( logger, "Error setting auto Gain." );
+	} else {
+		Property prop;
+		prop.type = SHUTTER;
+		prop.onePush = false;
+		prop.onOff = true;
+		prop.autoManualMode = false;
+		prop.absControl = true;
+		prop.absValue = (float)m_shutterMS;
+		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+			LOG4CPP_ERROR( logger, "Error setting manual Gain." );
+	}
+
+
 
 	if ( cam.StartCapture() != PGRERROR_OK )
 	{
@@ -294,6 +444,22 @@ void FlyCapture2FrameGrabber::ThreadProc()
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 			if ( m_outPort.isConnected() )
 				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
+		} 
+		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RAW8 )
+		{
+			// convert RAW image to RGB8
+			FlyCapture2::Image convertedImage;
+			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
+			Vision::Image rawImage( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() );
+			rawImage.widthStep = convertedImage.GetStride();
+
+			if ( m_colorOutPort.isConnected() )
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+			if ( m_outPort.isConnected() )
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_BGR2GRAY, 1 ) ) );
+		} 
+		else {
+			LOG4CPP_DEBUG( logger, "UNKOWN PIXEL FORMAT: " << image.GetPixelFormat() );	
 		}
 	}
 

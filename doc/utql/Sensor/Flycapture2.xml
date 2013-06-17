@@ -40,6 +40,36 @@
 				</Description>
 			</Attribute>
 
+			<Attribute name="cameraBusIndex" default="-1" xsi:type="IntAttributeDeclarationType" displayName="camera bus index">
+				<Description>
+					<h:p>The camera bus index.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="cameraSerialNumber" default="-1" xsi:type="IntAttributeDeclarationType" displayName="camera serial number">
+				<Description>
+					<h:p>The camera serial number.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="gainDB" default="-1" xsi:type="DoubleAttributeDeclarationType" displayName="gain in DB">
+				<Description>
+					<h:p>The camera property: gain in DB.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="shutterMS" default="-1" xsi:type="DoubleAttributeDeclarationType" displayName="shutter in MS">
+				<Description>
+					<h:p>The camera property: shutter in milliseconds.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="triggerFlash" default="false" xsi:type="StringAttributeDeclarationType" displayName="activate flash trigger">
+				<Description>
+					<h:p>Activate the flash trigger connected to GPIO port 0.</h:p>
+				</Description>
+			</Attribute>
+
 			<Attribute name="videoMode" default="" xsi:type="StringAttributeDeclarationType" displayName="video mode">
 				<Description>
 					<h:p>Video Mode - one of: 640x480RGB, 640x480Y8, 800x600RGB, 800x600Y8, 
