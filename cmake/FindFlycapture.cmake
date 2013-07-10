@@ -37,7 +37,7 @@ ENDIF(FLYCAPTURE_TEST_INCLUDE_PATHS STREQUAL "")
 
 # Prefer building 64 bit binaries on Windows. If you prefer building
 # 32 bit binaries on 64 bit machines, set this to FALSE.
-SET(PREFER_64_BIT TRUE)
+SET(PREFER_64_BIT FALSE)
 
 
 SET(FLYCAPTURE_TEST_LIB_PATHS "$ENV{FLYCAPTURE_TEST_LIB_PATHS}")
