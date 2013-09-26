@@ -43,11 +43,13 @@
 #include <boost/scoped_ptr.hpp>
 
 #include <utDataflow/PushSupplier.h>
+#include <utDataflow/PullSupplier.h>
 #include <utDataflow/Component.h>
 #include <utDataflow/ComponentFactory.h>
 #include <utMeasurement/Measurement.h>
 #include <utMeasurement/TimestampSync.h>
 #include <utVision/Image.h>
+#include <utVision/Undistortion.h>
 #include <opencv/cv.h>
 
 //#include <Ubitrack/Util/CleanWindows.h>
@@ -164,6 +166,16 @@ public:
 	/** destructor, waits until thread stops */
 	~FlyCapture2FrameGrabber();
 
+    /** handler method for incoming pull requests */
+	Measurement::Matrix3x3 getIntrinsic( Measurement::Timestamp t )
+	{
+		if (m_undistorter) {
+			return Measurement::Matrix3x3( t, m_undistorter->getIntrinsics() );
+		} else {
+			UBITRACK_THROW( "No undistortion configured for FlyCapture2FrameGrabber" );
+		}
+	}
+
 protected:
 	// fly capture stuff
 	FlyCapture2::VideoMode m_videoMode;
@@ -198,9 +210,13 @@ protected:
 	// stop the thread?
 	volatile bool m_bStop;
 
+	/** undistorter */
+	boost::shared_ptr<Vision::Undistortion> m_undistorter;
+
 	// the ports
 	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_outPort;
 	Dataflow::PushSupplier< Measurement::ImageMeasurement > m_colorOutPort;
+	Dataflow::PullSupplier< Measurement::Matrix3x3 > m_intrinsicsPort;
 };
 
 
@@ -218,6 +234,7 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 	, m_triggerFlash( false )
 	, m_outPort( "Output", *this )
 	, m_colorOutPort( "ColorOutput", *this )
+	, m_intrinsicsPort( "Intrinsics", *this, boost::bind( &FlyCapture2FrameGrabber::getIntrinsic, this, _1 ) )
 {
 	using namespace FlyCapture2;
 
@@ -266,6 +283,11 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 		LOG4CPP_WARN( logger, "Both videoMode and frameRate must be set for any value to have an effect!" );
 
 	subgraph->m_DataflowAttributes.getAttributeData( "timeOffset", m_timeOffset );
+
+	std::string intrinsicFile = subgraph->m_DataflowAttributes.getAttributeString( "intrinsicMatrixFile" );
+	std::string distortionFile = subgraph->m_DataflowAttributes.getAttributeString( "distortionFile" );
+
+	m_undistorter.reset(new Vision::Undistortion(intrinsicFile, distortionFile));
 
 	// start thread
 	m_Thread.reset( new boost::thread( boost::bind( &FlyCapture2FrameGrabber::ThreadProc, this ) ) );
@@ -415,13 +437,18 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		if ( !m_running )
 			continue;
 
+		boost::shared_ptr< Vision::Image > pColorImage;
+		boost::shared_ptr< Vision::Image > pGreyImage;
+
 		// TODO: real timestamps
 		Measurement::Timestamp timeStamp = Measurement::now();
 
 		if ( image.GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
-			Vision::Image rawImage( image.GetCols(), image.GetRows(), 1, image.GetData() );
-			rawImage.widthStep = image.GetStride();
+			pGreyImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 1, image.GetData() ) );
+			pGreyImage->widthStep = image.GetStride();
+
+			pGreyImage = m_undistorter->undistort( pGreyImage );
 
 			// TODO: configureable downsampling for high-res cameras
 			// LOG4CPP_DEBUG( logger, "downsampling" );
@@ -429,34 +456,38 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			// cvResize( rawImage, *pSmallImage );
 			// m_outPort.send( Vision::ImageMeasurement( timeStamp, pSmallImage ) );
 
-			LOG4CPP_DEBUG( logger, "sending" );
-			m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+			m_outPort.send( Measurement::ImageMeasurement( timeStamp, pGreyImage ) );
 			
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_GRAY2RGB, 3 ) ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pGreyImage->CvtColor( CV_GRAY2RGB, 3 ) ) );
 		} 
 		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
-			Vision::Image rawImage( image.GetCols(), image.GetRows(), 3, image.GetData() );
-			rawImage.widthStep = image.GetStride();
+			pColorImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 3, image.GetData() ) );
+			pColorImage->widthStep = image.GetStride();
+
+			pColorImage = m_undistorter->undistort( pColorImage );
 
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage ) );
 			if ( m_outPort.isConnected() )
-				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_RGB2GRAY, 1 ) ) );
 		} 
 		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RAW8 )
 		{
 			// convert RAW image to RGB8
 			FlyCapture2::Image convertedImage;
 			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
-			Vision::Image rawImage( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() );
-			rawImage.widthStep = convertedImage.GetStride();
+
+			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
+			pColorImage->widthStep = convertedImage.GetStride();
+
+			pColorImage = m_undistorter->undistort( pColorImage );
 
 			if ( m_colorOutPort.isConnected() )
-				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
+				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage ) );
 			if ( m_outPort.isConnected() )
-				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_BGR2GRAY, 1 ) ) );
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_BGR2GRAY, 1 ) ) );
 		} 
 		else {
 			LOG4CPP_DEBUG( logger, "UNKOWN PIXEL FORMAT: " << image.GetPixelFormat() );	

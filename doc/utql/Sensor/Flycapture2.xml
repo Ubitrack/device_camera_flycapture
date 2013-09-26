@@ -15,6 +15,15 @@
 		<Output>
 			<Node name="Camera" displayName="Camera" />
 			<Node name="ImagePlane" displayName="Image Plane" />
+			
+			<Edge name="Intrinsics" source="Camera"	destination="ImagePlane" displayName="Camera Intrinsics">
+				<Description>
+					<h:p>The intrinsic camera matrix.</h:p>
+				</Description>
+				<Attribute name="type" value="3x3Matrix" xsi:type="EnumAttributeReferenceType"/>
+				<Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
+			</Edge>
+			
 			<Edge name="Output" source="Camera" destination="ImagePlane" displayName="Greyscale Image">
 				<Description>
 					<h:p>The camera image (greyscale).</h:p>
@@ -81,9 +90,102 @@
 					<h:p>Capture Frame Rate - one of: 1.875, 3.75, 7.5, 15, 30, 60, 120, 240.</h:p>
 				</Description>
 			</Attribute>
+			
+            <Attribute name="intrinsicMatrixFile" default="CamMatrix.calib" displayName="Intrinsic matrix file" xsi:type="PathAttributeDeclarationType">
+                <Description>
+                	<h:p>Optional file where the camera intrinsic matrix will be read from. This is necessary to 
+                	undistort the image. The matrix is also provided to other components via the 
+                	<h:code>Intrinsics</h:code> port</h:p>
+               	</Description>
+            </Attribute>
+            
+			<Attribute name="distortionFile" default="CamCoeffs.calib" displayName="Distortion file" xsi:type="PathAttributeDeclarationType">
+                <Description><h:p>Optional file where radial distortion coefficients will be read from. This is necessary to
+                undistort the image. </h:p></Description>
+            </Attribute>
+			
 		</DataflowConfiguration>
 	</Pattern>
 
+	
+	<Pattern name="FlyCapture2FrameGrabber" displayName="FlyCapture2 Framegrabber (Uncalibrated)">
+		<Description>
+			<h:p>
+				This component grabs images from a FlyCapture2 device and pushes them.
+			</h:p>
+		</Description>
+		<Output>
+			<Node name="Camera" displayName="Camera" />
+			<Node name="ImagePlane" displayName="Image Plane" />
+			<Edge name="Output" source="Camera" destination="ImagePlane" displayName="Greyscale Image">
+				<Description>
+					<h:p>The camera image (greyscale).</h:p>
+				</Description>
+				<Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
+				<Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
+			</Edge>
+			<Edge name="ColorOutput" source="Camera" destination="ImagePlane" displayName="Color Image">
+				<Description>
+					<h:p>The camera image (color).</h:p>
+				</Description>
+				<Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
+				<Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
+			</Edge>
+		</Output>
+
+		<DataflowConfiguration>
+			<UbitrackLib class="FlyCapture2FrameGrabber" />
+			<Attribute name="timeOffset" default="0" xsi:type="IntAttributeDeclarationType" displayName="time offset">
+				<Description>
+					<h:p>Offset in ms to add to the timestamps created by the component. This is used
+					to compensate clock shift.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="cameraBusIndex" default="-1" xsi:type="IntAttributeDeclarationType" displayName="camera bus index">
+				<Description>
+					<h:p>The camera bus index.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="cameraSerialNumber" default="-1" xsi:type="IntAttributeDeclarationType" displayName="camera serial number">
+				<Description>
+					<h:p>The camera serial number.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="gainDB" default="-1" xsi:type="DoubleAttributeDeclarationType" displayName="gain in DB">
+				<Description>
+					<h:p>The camera property: gain in DB.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="shutterMS" default="-1" xsi:type="DoubleAttributeDeclarationType" displayName="shutter in MS">
+				<Description>
+					<h:p>The camera property: shutter in milliseconds.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="triggerFlash" default="false" xsi:type="StringAttributeDeclarationType" displayName="activate flash trigger">
+				<Description>
+					<h:p>Activate the flash trigger connected to GPIO port 0.</h:p>
+				</Description>
+			</Attribute>
+
+			<Attribute name="videoMode" default="" xsi:type="StringAttributeDeclarationType" displayName="video mode">
+				<Description>
+					<h:p>Video Mode - one of: 640x480RGB, 640x480Y8, 800x600RGB, 800x600Y8, 
+					1024x768RGB, 1024x768Y8, 1280x960RGB, 1280x960Y8, 1600x1200RGB, 1600x1200Y8.</h:p>
+				</Description>
+			</Attribute>
+			<Attribute name="frameRate" default="" xsi:type="StringAttributeDeclarationType" displayName="frame rate">
+				<Description>
+					<h:p>Capture Frame Rate - one of: 1.875, 3.75, 7.5, 15, 30, 60, 120, 240.</h:p>
+				</Description>
+			</Attribute>
+			
+		</DataflowConfiguration>
+	</Pattern>	
 	<!-- Attribute declarations -->
 
 	<GlobalNodeAttributeDeclarations>
