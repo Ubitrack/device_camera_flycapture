@@ -108,7 +108,7 @@
 	</Pattern>
 
 	
-	<Pattern name="FlyCapture2FrameGrabber" displayName="FlyCapture2 Framegrabber (Uncalibrated)">
+	<Pattern name="FlyCapture2FrameGrabberUncalibrated" displayName="FlyCapture2 Framegrabber (Uncalibrated)">
 		<Description>
 			<h:p>
 				This component grabs images from a FlyCapture2 device and pushes them.
