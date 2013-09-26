@@ -477,7 +477,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		{
 			// convert RAW image to RGB8
 			FlyCapture2::Image convertedImage;
-			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
+			image.Convert(PIXEL_FORMAT_RGB, &convertedImage);
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
 			pColorImage->widthStep = convertedImage.GetStride();
@@ -487,7 +487,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			if ( m_colorOutPort.isConnected() )
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage ) );
 			if ( m_outPort.isConnected() )
-				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_BGR2GRAY, 1 ) ) );
+				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_RGB2GRAY, 1 ) ) );
 		} 
 		else {
 			LOG4CPP_DEBUG( logger, "UNKOWN PIXEL FORMAT: " << image.GetPixelFormat() );	
