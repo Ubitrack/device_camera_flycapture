@@ -8,7 +8,7 @@ opts.Add( 'FLYCAPTURE_PATH', 'Path to the PGR flycapture library and header file
 
 libName = "FLYCAPTURE"
 
-
+#[{additional compile settings}, {include files}, {language (C++)},{library to link against (optional)}, {source code (optional)}]	
 compileSettings =  [{} , "PGRFlyCapture.h", "C++"]
 libFinder = standardLibFinder(libName,compileSettings)
 
