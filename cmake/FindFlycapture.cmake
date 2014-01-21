@@ -1,9 +1,13 @@
 # Get default values for FLYCAPTURE_ROOT and FLYCAPTURE_LAYOUT
 
+# Prefer building 64 bit binaries on Windows. If you prefer building
+# 32 bit binaries on 64 bit machines, set this to FALSE.
+SET(PREFER_64_BIT FALSE)
+
 IF(WIN32)
-  IF(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2")
+  IF(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2" AND PREFER_64_BIT)
     SET(FLYCAPTURE_ROOT "C:\\Program Files\\Point Grey Research\\FlyCapture2")
-  ELSE(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2")
+  ELSE(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2" AND PREFER_64_BIT)
     IF(EXISTS "C:\\Program Files (x86)\\Point Grey Research\\FlyCapture2")
       # Maybe we're on 64bit but have 32bit SDK installed.
       SET(FLYCAPTURE_ROOT "C:\\Program Files (x86)\\Point Grey Research\\FlyCapture2")
@@ -11,7 +15,7 @@ IF(WIN32)
       # If not, default to "C:\Program Files".
       SET(FLYCAPTURE_ROOT "C:\\Program Files\\Point Grey Research\\FlyCapture2")
     ENDIF(EXISTS "C:\\Program Files (x86)\\Point Grey Research\\FlyCapture2")
-  ENDIF(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2")
+  ENDIF(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2" AND PREFER_64_BIT)
 ELSE(WIN32)
   # Assume headers and libraries are installed in FHS locations
   SET(FLYCAPTURE_ROOT "/usr")
@@ -34,10 +38,6 @@ IF(FLYCAPTURE_TEST_INCLUDE_PATHS STREQUAL "")
   SET(FLYCAPTURE_TEST_INCLUDE_PATHS "${FLYCAPTURE_ROOT}/include/flycapture" "${FLYCAPTURE_ROOT}/include" )
 ENDIF(FLYCAPTURE_TEST_INCLUDE_PATHS STREQUAL "")
 
-
-# Prefer building 64 bit binaries on Windows. If you prefer building
-# 32 bit binaries on 64 bit machines, set this to FALSE.
-SET(PREFER_64_BIT FALSE)
 
 
 SET(FLYCAPTURE_TEST_LIB_PATHS "$ENV{FLYCAPTURE_TEST_LIB_PATHS}")
