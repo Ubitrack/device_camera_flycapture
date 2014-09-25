@@ -465,6 +465,9 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		{
 			pColorImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 3, image.GetData() ) );
 			pColorImage->widthStep = image.GetStride();
+			pColorImage->channelSeq[0] = 'R';
+			pColorImage->channelSeq[1] = 'G';
+			pColorImage->channelSeq[2] = 'B';
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
@@ -481,6 +484,9 @@ void FlyCapture2FrameGrabber::ThreadProc()
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
 			pColorImage->widthStep = convertedImage.GetStride();
+			pColorImage->channelSeq[0] = 'R';
+			pColorImage->channelSeq[1] = 'G';
+			pColorImage->channelSeq[2] = 'B';
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
