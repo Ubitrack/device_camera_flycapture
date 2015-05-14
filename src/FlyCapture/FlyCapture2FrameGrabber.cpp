@@ -480,13 +480,13 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		{
 			// convert RAW image to RGB8
 			FlyCapture2::Image convertedImage;
-			image.Convert(PIXEL_FORMAT_RGB, &convertedImage);
+			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
 			pColorImage->widthStep = convertedImage.GetStride();
-			pColorImage->channelSeq[0] = 'R';
+			pColorImage->channelSeq[0] = 'B';
 			pColorImage->channelSeq[1] = 'G';
-			pColorImage->channelSeq[2] = 'B';
+			pColorImage->channelSeq[2] = 'R';
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
