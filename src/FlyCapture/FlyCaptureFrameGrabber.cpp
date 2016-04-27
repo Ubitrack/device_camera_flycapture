@@ -1,4 +1,4 @@
-     /*
+/*
  * Ubitrack - Library for Ubiquitous Tracking
  * Copyright 2006, Technische Universitaet Muenchen, and individual
  * contributors as indicated by the @authors tag. See the
@@ -78,7 +78,6 @@ namespace {
 			(*this)[ "1600x1200RGB" ] = FLYCAPTURE_VIDEOMODE_1600x1200RGB;
 			(*this)[ "1600x1200Y8" ] = FLYCAPTURE_VIDEOMODE_1600x1200Y8;
 			(*this)[ "ANY" ] = FLYCAPTURE_VIDEOMODE_ANY;
-			// Chameleon3 resolutions
 		}
 	};
 	static FlyCaptureModeMap flyCaptureModeMap;
@@ -223,17 +222,10 @@ void FlyCaptureFrameGrabber::ThreadProc()
 		return;
 	}
 
-	FlyCaptureImage* image[2];
-	image[0] = new FlyCaptureImage;
-	image[1] = new FlyCaptureImage;
-	FlyCaptureImage* cur_image = 0;
-
 	while ( !m_bStop )
 	{
-		// always use the first buffer to work on
-		cur_image = image[0]; 
-
-		if ( flycaptureGrabImage2( m_context, cur_image ) != FLYCAPTURE_OK )
+		FlyCaptureImage image;
+		if ( flycaptureGrabImage2( m_context, &image ) != FLYCAPTURE_OK )
 		{
 			LOG4CPP_ERROR( logger, "Error in flycaptureGrabImage2" );
 			break;
@@ -246,10 +238,10 @@ void FlyCaptureFrameGrabber::ThreadProc()
 		// TODO: real timestamps
 		Measurement::Timestamp timeStamp = Measurement::now();
 
-		if ( cur_image->pixelFormat == FLYCAPTURE_MONO8 )
+		if ( image.pixelFormat == FLYCAPTURE_MONO8 )
 		{
-			Vision::Image rawImage( cur_image->iCols, cur_image->iRows, 1, cur_image->pData );
-			rawImage.widthStep = cur_image->iRowInc;
+			Vision::Image rawImage( image.iCols, image.iRows, 1, image.pData );
+			rawImage.widthStep = image.iRowInc;
 
 			// TODO: configureable downsampling for high-res cameras
 			// LOG4CPP_DEBUG( logger, "downsampling" );
@@ -260,29 +252,19 @@ void FlyCaptureFrameGrabber::ThreadProc()
 			LOG4CPP_DEBUG( logger, "sending" );
 			m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 		} 
-		else if ( cur_image->pixelFormat == FLYCAPTURE_RGB8 )
+		else if ( image.pixelFormat == FLYCAPTURE_RGB8 )
 		{
-			Vision::Image rawImage( cur_image->iCols, cur_image->iRows, 3, cur_image->pData );
-			rawImage.widthStep = cur_image->iRowInc;
+			Vision::Image rawImage( image.iCols, image.iRows, 3, image.pData );
+			rawImage.widthStep = image.iRowInc;
 
 			if ( m_colorOutPort.isConnected() )
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.Clone() ) );
 			if ( m_outPort.isConnected() )
 				m_outPort.send( Measurement::ImageMeasurement( timeStamp, rawImage.CvtColor( CV_RGB2GRAY, 1 ) ) );
 		}
-		// what about Y8 encoding ??
-
-		// swap buffers
-		std::swap(image[0], image[1]);
 	}
 
-	// clean up
-	cur_image = 0;
-	delete image[0];
-	delete image[1];
-
 	flycaptureStop( m_context );
-
 
 	LOG4CPP_DEBUG( logger, "Thread stopped" );
 }
