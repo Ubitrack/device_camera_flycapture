@@ -51,6 +51,8 @@
 #include <utVision/Image.h>
 #include <utVision/Undistortion.h>
 #include <opencv/cv.h>
+#include <utVision/OpenCLManager.h>
+
 
 //#include <Ubitrack/Util/CleanWindows.h>
 //#ifndef _WIN32_WINNT
@@ -201,6 +203,9 @@ protected:
 	// shift timestamps (ms)
 	int m_timeOffset;
 
+	// automatic upload to GPU?
+	bool m_autoGPUUpload;
+
 	// thread main loop
 	void ThreadProc();
 
@@ -235,6 +240,7 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 	, m_outPort( "Output", *this )
 	, m_colorOutPort( "ColorOutput", *this )
 	, m_intrinsicsPort( "Intrinsics", *this, boost::bind( &FlyCapture2FrameGrabber::getIntrinsic, this, _1 ) )
+	, m_autoGPUUpload(false)
 {
 	using namespace FlyCapture2;
 
@@ -286,6 +292,15 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 
 	std::string intrinsicFile = subgraph->m_DataflowAttributes.getAttributeString( "intrinsicMatrixFile" );
 	std::string distortionFile = subgraph->m_DataflowAttributes.getAttributeString( "distortionFile" );
+
+	Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
+	if (oclManager.isEnabled()) {
+		if (subgraph->m_DataflowAttributes.hasAttribute("uploadImageOnGPU")){
+			m_autoGPUUpload = subgraph->m_DataflowAttributes.getAttributeString("uploadImageOnGPU") == "true";
+			LOG4CPP_INFO(logger, "Upload to GPU enabled? " << m_autoGPUUpload);
+		}
+	}
+
 
 	m_undistorter.reset(new Vision::Undistortion(intrinsicFile, distortionFile));
 
@@ -446,7 +461,15 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		if ( image.GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
 			pGreyImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 1, image.GetData() ) );
-			pGreyImage->widthStep = image.GetStride();
+			pGreyImage->iplImage()->widthStep = image.GetStride();
+
+			if (m_autoGPUUpload){
+				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pGreyImage->uMat();
+				}
+			}
 
 			pGreyImage = m_undistorter->undistort( pGreyImage );
 
@@ -464,10 +487,18 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
 			pColorImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 3, image.GetData() ) );
-			pColorImage->widthStep = image.GetStride();
-			pColorImage->channelSeq[0] = 'R';
-			pColorImage->channelSeq[1] = 'G';
-			pColorImage->channelSeq[2] = 'B';
+			pColorImage->iplImage()->widthStep = image.GetStride();
+			pColorImage->iplImage()->channelSeq[0] = 'R';
+			pColorImage->iplImage()->channelSeq[1] = 'G';
+			pColorImage->iplImage()->channelSeq[2] = 'B';
+
+			if (m_autoGPUUpload){
+				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pColorImage->uMat();
+				}
+			}
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
@@ -483,10 +514,18 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
-			pColorImage->widthStep = convertedImage.GetStride();
-			pColorImage->channelSeq[0] = 'B';
-			pColorImage->channelSeq[1] = 'G';
-			pColorImage->channelSeq[2] = 'R';
+			pColorImage->iplImage()->widthStep = convertedImage.GetStride();
+			pColorImage->iplImage()->channelSeq[0] = 'B';
+			pColorImage->iplImage()->channelSeq[1] = 'G';
+			pColorImage->iplImage()->channelSeq[2] = 'R';
+
+			if (m_autoGPUUpload){
+				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pColorImage->uMat();
+				}
+			}
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
