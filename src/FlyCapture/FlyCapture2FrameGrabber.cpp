@@ -461,7 +461,8 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		if ( image.GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
 			pGreyImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 1, image.GetData() ) );
-			pGreyImage->iplImage()->widthStep = image.GetStride();
+			pGreyImage->Mat().step = image.GetStride();
+			pGreyImage->set_pixelFormat(Vision::Image::LUMINANCE);
 
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
@@ -487,10 +488,8 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
 			pColorImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 3, image.GetData() ) );
-			pColorImage->iplImage()->widthStep = image.GetStride();
-			pColorImage->iplImage()->channelSeq[0] = 'R';
-			pColorImage->iplImage()->channelSeq[1] = 'G';
-			pColorImage->iplImage()->channelSeq[2] = 'B';
+			pColorImage->Mat().step = image.GetStride();
+			pColorImage->set_pixelFormat(Vision::Image::RGB);
 
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
@@ -514,10 +513,8 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
-			pColorImage->iplImage()->widthStep = convertedImage.GetStride();
-			pColorImage->iplImage()->channelSeq[0] = 'B';
-			pColorImage->iplImage()->channelSeq[1] = 'G';
-			pColorImage->iplImage()->channelSeq[2] = 'R';
+			pColorImage->Mat().step = convertedImage.GetStride();
+			pColorImage->set_pixelFormat(Vision::Image::BGR);
 
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
