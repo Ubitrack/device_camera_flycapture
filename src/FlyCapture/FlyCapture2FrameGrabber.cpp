@@ -464,6 +464,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			pGreyImage->Mat().step = image.GetStride();
 			pGreyImage->set_pixelFormat(Vision::Image::LUMINANCE);
 
+			pGreyImage = m_undistorter->undistort( pGreyImage );
+
+			// Flycapture Segfaults if GPU upload is done before undistortion
+			// probably there is some issue with releasing/allocating memory
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
 				if (oclManager.isInitialized()) {
@@ -471,8 +475,6 @@ void FlyCapture2FrameGrabber::ThreadProc()
 					pGreyImage->uMat();
 				}
 			}
-
-			pGreyImage = m_undistorter->undistort( pGreyImage );
 
 			// TODO: configureable downsampling for high-res cameras
 			// LOG4CPP_DEBUG( logger, "downsampling" );
@@ -491,6 +493,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			pColorImage->Mat().step = image.GetStride();
 			pColorImage->set_pixelFormat(Vision::Image::RGB);
 
+			pColorImage = m_undistorter->undistort( pColorImage );
+
+			// Flycapture Segfaults if GPU upload is done before undistortion
+			// probably there is some issue with releasing/allocating memory
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
 				if (oclManager.isInitialized()) {
@@ -498,8 +504,6 @@ void FlyCapture2FrameGrabber::ThreadProc()
 					pColorImage->uMat();
 				}
 			}
-
-			pColorImage = m_undistorter->undistort( pColorImage );
 
 			if ( m_colorOutPort.isConnected() )
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage ) );
@@ -516,6 +520,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			pColorImage->Mat().step = convertedImage.GetStride();
 			pColorImage->set_pixelFormat(Vision::Image::BGR);
 
+			pColorImage = m_undistorter->undistort( pColorImage );
+
+			// Flycapture Segfaults if GPU upload is done before undistortion
+			// probably there is some issue with releasing/allocating memory
 			if (m_autoGPUUpload){
 				Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
 				if (oclManager.isInitialized()) {
@@ -523,8 +531,6 @@ void FlyCapture2FrameGrabber::ThreadProc()
 					pColorImage->uMat();
 				}
 			}
-
-			pColorImage = m_undistorter->undistort( pColorImage );
 
 			if ( m_colorOutPort.isConnected() )
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage ) );
