@@ -52,6 +52,7 @@
 #include <utVision/Undistortion.h>
 #include <opencv/cv.h>
 #include <utVision/OpenCLManager.h>
+#include <utUtil/TracingProvider.h>
 
 
 //#include <Ubitrack/Util/CleanWindows.h>
@@ -457,6 +458,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 
 		// TODO: real timestamps
 		Measurement::Timestamp timeStamp = Measurement::now();
+
+#ifdef ENABLE_EVENT_TRACING
+		TRACEPOINT_MEASUREMENT_CREATE(getEventDomain(), timeStamp, getName().c_str(), "VideoCapture")
+#endif
 
 		if ( image.GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
