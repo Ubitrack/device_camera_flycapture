@@ -48,6 +48,7 @@
 #include <utDataflow/ComponentFactory.h>
 #include <utMeasurement/Measurement.h>
 #include <utMeasurement/TimestampSync.h>
+#include <utUtil/TracingProvider.h>
 #include <utVision/Image.h>
 #include <utVision/Undistortion.h>
 #include <opencv/cv.h>
