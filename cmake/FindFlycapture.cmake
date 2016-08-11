@@ -2,7 +2,7 @@
 
 # Prefer building 64 bit binaries on Windows. If you prefer building
 # 32 bit binaries on 64 bit machines, set this to FALSE.
-SET(PREFER_64_BIT FALSE)
+SET(PREFER_64_BIT X86_64)
 
 IF(WIN32)
   IF(EXISTS "C:\\Program Files\\Point Grey Research\\FlyCapture2" AND PREFER_64_BIT)
