@@ -167,6 +167,12 @@ public:
 	/** constructor */
 	FlyCapture2FrameGrabber( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph >  );
 
+	/** Component start method. starts the thread */
+	virtual void start();
+
+	/** Component stop method, stops thread */
+	virtual void stop();
+
 	/** destructor, waits until thread stops */
 	~FlyCapture2FrameGrabber();
 
@@ -306,8 +312,38 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 
 	m_undistorter.reset(new Vision::Undistortion(intrinsicFile, distortionFile));
 
-	// start thread
-	m_Thread.reset( new boost::thread( boost::bind( &FlyCapture2FrameGrabber::ThreadProc, this ) ) );
+}
+
+
+void FlyCapture2FrameGrabber::stop()
+{
+	LOG4CPP_TRACE(logger, "Stopping thread...");
+
+	if (m_running)
+	{
+		LOG4CPP_TRACE(logger, "Thread was running");
+
+		if (m_Thread)
+		{
+			m_bStop = true;
+			m_Thread->join();
+		}
+		m_running = false;
+	}
+}
+
+
+void FlyCapture2FrameGrabber::start()
+{
+	LOG4CPP_TRACE(logger, "Starting thread...");
+
+	if (!m_running)
+	{
+		m_bStop = false;
+		// start thread
+		m_Thread.reset(new boost::thread(boost::bind(&FlyCapture2FrameGrabber::ThreadProc, this)));
+		m_running = true;
+	}
 }
 
 

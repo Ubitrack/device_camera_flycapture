@@ -149,6 +149,12 @@ public:
 	/** constructor */
 	FlyCapture2Fmt7FrameGrabber( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph >  );
 
+	/** Component start method. starts the thread */
+	virtual void start();
+
+	/** Component stop method, stops thread */
+	virtual void stop();
+
 	/** destructor, waits until thread stops */
 	~FlyCapture2Fmt7FrameGrabber();
 
@@ -284,8 +290,39 @@ FlyCapture2Fmt7FrameGrabber::FlyCapture2Fmt7FrameGrabber( const std::string& sNa
 
 	m_undistorter.reset(new Vision::Undistortion(intrinsicFile, distortionFile));
 
-	// start thread
-	m_Thread.reset( new boost::thread( boost::bind( &FlyCapture2Fmt7FrameGrabber::ThreadProc, this ) ) );
+}
+
+
+
+void FlyCapture2Fmt7FrameGrabber::stop()
+{
+	LOG4CPP_TRACE(logger, "Stopping thread...");
+
+	if (m_running)
+	{
+		LOG4CPP_TRACE(logger, "Thread was running");
+
+		if (m_Thread)
+		{
+			m_bStop = true;
+			m_Thread->join();
+		}
+		m_running = false;
+	}
+}
+
+
+void FlyCapture2Fmt7FrameGrabber::start()
+{
+	LOG4CPP_TRACE(logger, "Starting thread...");
+
+	if (!m_running)
+	{
+		m_bStop = false;
+		// start thread
+		m_Thread.reset(new boost::thread(boost::bind(&FlyCapture2Fmt7FrameGrabber::ThreadProc, this)));
+		m_running = true;
+	}
 }
 
 
@@ -496,7 +533,7 @@ void FlyCapture2Fmt7FrameGrabber::ThreadProc()
 	}
 
 	// set shutter
-	if (m_shutterMS > 0) {
+	if (m_cameraFrameRate > 0) {
 		Property prop;
 		prop.type = FRAME_RATE;
 		prop.onePush = false;
