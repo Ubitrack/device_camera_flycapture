@@ -286,6 +286,10 @@ FlyCapture2Fmt7FrameGrabber::FlyCapture2Fmt7FrameGrabber( const std::string& sNa
 			m_autoGPUUpload = subgraph->m_DataflowAttributes.getAttributeString("uploadImageOnGPU") == "true";
 			LOG4CPP_INFO(logger, "Upload to GPU enabled? " << m_autoGPUUpload);
 		}
+		if (m_autoGPUUpload){
+			oclManager.activate();
+			LOG4CPP_INFO(logger, "Require OpenCLManager");
+		}
 	}
 
 	m_undistorter.reset(new Vision::Undistortion(intrinsicFile, distortionFile));
