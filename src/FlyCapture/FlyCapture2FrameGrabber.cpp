@@ -54,6 +54,7 @@
 #include <opencv/cv.h>
 #include <utVision/OpenCLManager.h>
 #include <utUtil/TracingProvider.h>
+#include <utUtil/OS.h>
 
 
 //#include <Ubitrack/Util/CleanWindows.h>
@@ -148,6 +149,13 @@ namespace {
 namespace Ubitrack { namespace Drivers {
 
 /**
+ * Callback function as defined by the typedef ImageEventCallback in 
+ * CameraBase.h in the PointGreyResearch api.  
+ */
+void FlyCapture2FrameGrabberCallback(FlyCapture2::Image* pImage,  const void* pCallbackData);
+
+
+/**
  * @ingroup vision_components
  * Reads camera images using PGR FlyCapture
  *
@@ -167,11 +175,20 @@ public:
 	/** constructor */
 	FlyCapture2FrameGrabber( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph >  );
 
-	/** Component start method. starts the thread */
+	/** Component start method. */
 	virtual void start();
 
-	/** Component stop method, stops thread */
+	/** Component stop method. */
 	virtual void stop();
+	
+	/** start async capturing **/
+	void startCapturing();
+
+	/** received captured image **/
+	void onImageGrabbed(FlyCapture2::Image* image) const;
+
+	/** stop async capturing **/
+	void stopCapturing();
 
 	/** destructor, waits until thread stops */
 	~FlyCapture2FrameGrabber();
@@ -191,6 +208,7 @@ protected:
 	FlyCapture2::VideoMode m_videoMode;
 	FlyCapture2::FrameRate m_frameRate;
 	FlyCapture2::PixelFormat m_pixelFormat;
+	boost::scoped_ptr<FlyCapture2::Camera> m_cam;
 
 	// the serial number
 	int m_cameraSerialNumber;
@@ -214,15 +232,6 @@ protected:
 	// automatic upload to GPU?
 	bool m_autoGPUUpload;
 
-	// thread main loop
-	void ThreadProc();
-
-	// the thread
-	boost::scoped_ptr< boost::thread > m_Thread;
-
-	// stop the thread?
-	volatile bool m_bStop;
-
 	/** undistorter */
 	boost::shared_ptr<Vision::Undistortion> m_undistorter;
 
@@ -232,18 +241,24 @@ protected:
 	Dataflow::PullSupplier< Measurement::Matrix3x3 > m_intrinsicsPort;
 };
 
+void FlyCapture2FrameGrabberCallback(FlyCapture2::Image* pImage,  const void* pCallbackData)
+{
+  const FlyCapture2FrameGrabber* pg = static_cast<const FlyCapture2FrameGrabber*> (pCallbackData);
+  pg->onImageGrabbed(pImage);
+}
+
 
 FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph > subgraph )
 	: Dataflow::Component( sName )
 	, m_videoMode( FlyCapture2::NUM_VIDEOMODES )
 	, m_frameRate( FlyCapture2::NUM_FRAMERATES )
 	, m_pixelFormat( FlyCapture2::NUM_PIXEL_FORMATS )
+	, m_cam(new FlyCapture2::Camera())
 	, m_timeOffset( 0 )
 	, m_cameraSerialNumber( -1 )
 	, m_cameraBusIndex( -1 )
 	, m_gainDB( -1 ) // -1 is auto
 	, m_shutterMS( -1 ) // -1 is auto
-	, m_bStop( false )
 	, m_triggerFlash( false )
 	, m_outPort( "Output", *this )
 	, m_colorOutPort( "ColorOutput", *this )
@@ -321,51 +336,32 @@ FlyCapture2FrameGrabber::FlyCapture2FrameGrabber( const std::string& sName, boos
 
 void FlyCapture2FrameGrabber::stop()
 {
-	LOG4CPP_TRACE(logger, "Stopping thread...");
+	LOG4CPP_INFO(logger, "Stop capturing");
 
 	if (m_running)
 	{
-		LOG4CPP_TRACE(logger, "Thread was running");
-
-		if (m_Thread)
-		{
-			m_bStop = true;
-			m_Thread->join();
-		}
+		stopCapturing();
 		m_running = false;
 	}
+	LOG4CPP_TRACE(logger, "Component is stopped");
 }
 
 
 void FlyCapture2FrameGrabber::start()
 {
-	LOG4CPP_TRACE(logger, "Starting thread...");
+	LOG4CPP_TRACE(logger, "Star capturing");
 
 	if (!m_running)
 	{
-		m_bStop = false;
-		// start thread
-		m_Thread.reset(new boost::thread(boost::bind(&FlyCapture2FrameGrabber::ThreadProc, this)));
+		startCapturing();
 		m_running = true;
 	}
 }
 
-
-FlyCapture2FrameGrabber::~FlyCapture2FrameGrabber()
-{
-	if ( m_Thread )
-	{
-		m_bStop = true;
-		m_Thread->join();
-	}
-}
-
-
-void FlyCapture2FrameGrabber::ThreadProc()
-{
+void FlyCapture2FrameGrabber::startCapturing() {
 	using namespace FlyCapture2;
 	
-	LOG4CPP_DEBUG( logger, "Thread started" );
+	LOG4CPP_DEBUG( logger, "Start capturing" );
 
 	// initialize FlyCapture
 	BusManager busMgr;
@@ -400,8 +396,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 	}
 
 
-	Camera cam;
-	if ( cam.Connect( &guid ) != PGRERROR_OK )
+	if ( m_cam->Connect( &guid ) != PGRERROR_OK )
 	{
 		LOG4CPP_ERROR( logger, "Error in FlyCapture2::Camera::Connect" );
 		return;
@@ -410,19 +405,19 @@ void FlyCapture2FrameGrabber::ThreadProc()
 	if ( m_frameRate != NUM_FRAMERATES && m_videoMode != NUM_VIDEOMODES )
 	{
 		LOG4CPP_INFO( logger, "Setting framerate and videomode" );
-		if ( cam.SetVideoModeAndFrameRate( m_videoMode, m_frameRate ) != PGRERROR_OK )
+		if ( m_cam->SetVideoModeAndFrameRate( m_videoMode, m_frameRate ) != PGRERROR_OK )
 			LOG4CPP_WARN( logger, "Error in FlyCapture2::Camera::SetVideoModeAndFrameRate" );
 
 	}
 
 	if(m_triggerFlash) {
 		// set GPIO to output
-		cam.WriteRegister(0x11f8, 0xe0000000);
+		m_cam->WriteRegister(0x11f8, 0xe0000000);
 		// set GPIO signal to delay 0 and duration 2 (last 6 bytes)
-		cam.WriteRegister(0x1500, 0x83000003);
+		m_cam->WriteRegister(0x1500, 0x83000003);
 	} else {
 		// how to turn it off?!
-		//cam.WriteRegister(0x1500, 0x83000000);	
+		//m_cam->WriteRegister(0x1500, 0x83000000);	
 	}
 
 	// set gain
@@ -434,7 +429,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		prop.autoManualMode = true;
 		prop.valueA = 0;
 		prop.valueB = 0;
-		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+		if ( m_cam->SetProperty(&prop) != PGRERROR_OK )
 			LOG4CPP_ERROR( logger, "Error setting auto Gain." );
 	} else {
 		Property prop;
@@ -444,7 +439,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		prop.autoManualMode = false;
 		prop.absControl = true;
 		prop.absValue = (float)m_gainDB;
-		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+		if ( m_cam->SetProperty(&prop) != PGRERROR_OK )
 			LOG4CPP_ERROR( logger, "Error setting manual Gain." );
 	}
 
@@ -457,7 +452,7 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		prop.autoManualMode = true;
 		prop.valueA = 0;
 		prop.valueB = 0;
-		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+		if ( m_cam->SetProperty(&prop) != PGRERROR_OK )
 			LOG4CPP_ERROR( logger, "Error setting auto Gain." );
 	} else {
 		Property prop;
@@ -467,32 +462,25 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		prop.autoManualMode = false;
 		prop.absControl = true;
 		prop.absValue = (float)m_shutterMS;
-		if ( cam.SetProperty(&prop) != PGRERROR_OK )
+		if ( m_cam->SetProperty(&prop) != PGRERROR_OK )
 			LOG4CPP_ERROR( logger, "Error setting manual Gain." );
 	}
 
 
-
-	if ( cam.StartCapture() != PGRERROR_OK )
+	if ( m_cam->StartCapture(FlyCapture2FrameGrabberCallback, this) != PGRERROR_OK )
 	{
 		LOG4CPP_ERROR( logger, "Error in FlyCapture2::Camera::StartCapture" );
 		return;
 	}
-	
-	while ( !m_bStop )
-	{
-		FlyCapture2::Image image;
 
-		if ( cam.RetrieveBuffer( &image ) != PGRERROR_OK )
-		{
-			LOG4CPP_ERROR( logger, "Could not retrieve buffer" );
-			return;
-		}
-		
+}
+
+void FlyCapture2FrameGrabber::onImageGrabbed(FlyCapture2::Image* image) const {
+	using namespace FlyCapture2;
+
+	try {
+	
 		LOG4CPP_DEBUG( logger, "got image" );
-		
-		if ( !m_running )
-			continue;
 
 		boost::shared_ptr< Vision::Image > pColorImage;
 		boost::shared_ptr< Vision::Image > pGreyImage;
@@ -504,10 +492,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 		TRACEPOINT_MEASUREMENT_CREATE(getEventDomain(), timeStamp, getName().c_str(), "VideoCapture")
 #endif
 
-		if ( image.GetPixelFormat() == PIXEL_FORMAT_MONO8 )
+		if ( image->GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
-			pGreyImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 1, image.GetData() ) );
-			pGreyImage->Mat().step = image.GetStride();
+			pGreyImage.reset(new Vision::Image( image->GetCols(), image->GetRows(), 1, image->GetData() ) );
+			pGreyImage->Mat().step = image->GetStride();
 			pGreyImage->set_pixelFormat(Vision::Image::LUMINANCE);
 
 			pGreyImage = m_undistorter->undistort( pGreyImage );
@@ -533,10 +521,10 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			if ( m_colorOutPort.isConnected() )
 				m_colorOutPort.send( Measurement::ImageMeasurement( timeStamp, pGreyImage->CvtColor( CV_GRAY2RGB, 3 ) ) );
 		} 
-		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RGB8 )
+		else if ( image->GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
-			pColorImage.reset(new Vision::Image( image.GetCols(), image.GetRows(), 3, image.GetData() ) );
-			pColorImage->Mat().step = image.GetStride();
+			pColorImage.reset(new Vision::Image( image->GetCols(), image->GetRows(), 3, image->GetData() ) );
+			pColorImage->Mat().step = image->GetStride();
 			pColorImage->set_pixelFormat(Vision::Image::RGB);
 
 			pColorImage = m_undistorter->undistort( pColorImage );
@@ -556,11 +544,11 @@ void FlyCapture2FrameGrabber::ThreadProc()
 			if ( m_outPort.isConnected() )
 				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_RGB2GRAY, 1 ) ) );
 		} 
-		else if ( image.GetPixelFormat() == PIXEL_FORMAT_RAW8 )
+		else if ( image->GetPixelFormat() == PIXEL_FORMAT_RAW8 )
 		{
 			// convert RAW image to RGB8
 			FlyCapture2::Image convertedImage;
-			image.Convert(PIXEL_FORMAT_BGR, &convertedImage);
+			image->Convert(PIXEL_FORMAT_BGR, &convertedImage);
 
 			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
 			pColorImage->Mat().step = convertedImage.GetStride();
@@ -584,14 +572,41 @@ void FlyCapture2FrameGrabber::ThreadProc()
 				m_outPort.send( Measurement::ImageMeasurement( timeStamp, pColorImage->CvtColor( CV_RGB2GRAY, 1 ) ) );
 		} 
 		else {
-			LOG4CPP_DEBUG( logger, "UNKOWN PIXEL FORMAT: " << image.GetPixelFormat() );	
+			LOG4CPP_DEBUG( logger, "UNKOWN PIXEL FORMAT: " << image->GetPixelFormat() );	
 		}
+	} catch (std::exception &e) {
+		LOG4CPP_ERROR( logger, "Error while processing image: " << e.what() );	
+	}
+}
+
+void FlyCapture2FrameGrabber::stopCapturing() {
+	using namespace FlyCapture2;
+	LOG4CPP_TRACE( logger, "Tearing down capturing" );
+
+	Error error;
+	LOG4CPP_DEBUG( logger, "Stop capturing" );
+	error = m_cam->StopCapture();
+	if (error != PGRERROR_OK) {
+		LOG4CPP_ERROR( logger, "Error while stopping capturing" << error.GetDescription());
 	}
 
-	cam.StopCapture();
+	LOG4CPP_DEBUG( logger, "Disconnect camera" );
+	error = m_cam->Disconnect();
+	if (error != PGRERROR_OK) {
+		LOG4CPP_ERROR( logger, "Error while disconnecting" << error.GetDescription());
+	}
 
-	LOG4CPP_DEBUG( logger, "Thread stopped" );
+	LOG4CPP_DEBUG( logger, "Flycapture stopped" );
+
 }
+
+FlyCapture2FrameGrabber::~FlyCapture2FrameGrabber()
+{
+	if (m_running) {
+		stopCapturing();
+	}
+}
+
 
 } } // namespace Ubitrack::Driver
 
