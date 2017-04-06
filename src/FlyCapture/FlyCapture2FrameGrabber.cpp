@@ -353,11 +353,18 @@ void FlyCapture2FrameGrabber::stop()
 
 void FlyCapture2FrameGrabber::start()
 {
-	LOG4CPP_TRACE(logger, "Star capturing");
+	LOG4CPP_TRACE(logger, "Start capturing");
 
 	if (!m_running)
 	{
-		startCapturing();
+		if (m_autoGPUUpload) {
+			LOG4CPP_INFO(logger, "Waiting for OpenCLManager initialization callback.");
+			Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
+			oclManager.registerInitCallback(boost::bind(&FlyCapture2FrameGrabber::startCapturing, this));
+		}
+		else {
+			startCapturing();
+		}
 		m_running = true;
 	}
 }
@@ -498,9 +505,15 @@ void FlyCapture2FrameGrabber::onImageGrabbed(FlyCapture2::Image* image) const {
 
 		if ( image->GetPixelFormat() == PIXEL_FORMAT_MONO8 )
 		{
-			pGreyImage.reset(new Vision::Image( image->GetCols(), image->GetRows(), 1, image->GetData() ) );
+			Vision::Image::ImageFormatProperties fmt;
+			fmt.imageFormat = Vision::Image::LUMINANCE;
+			fmt.channels = 1;
+			fmt.depth = CV_8U;
+			fmt.bitsPerPixel = 8;
+			fmt.origin = 0;
+
+			pGreyImage.reset(new Vision::Image(image->GetCols(), image->GetRows(), fmt, image->GetData()));
 			pGreyImage->Mat().step = image->GetStride();
-			pGreyImage->set_pixelFormat(Vision::Image::LUMINANCE);
 
 			pGreyImage = m_undistorter->undistort( pGreyImage );
 
@@ -527,9 +540,15 @@ void FlyCapture2FrameGrabber::onImageGrabbed(FlyCapture2::Image* image) const {
 		} 
 		else if ( image->GetPixelFormat() == PIXEL_FORMAT_RGB8 )
 		{
-			pColorImage.reset(new Vision::Image( image->GetCols(), image->GetRows(), 3, image->GetData() ) );
+			Vision::Image::ImageFormatProperties fmt;
+			fmt.imageFormat = Vision::Image::RGB;
+			fmt.channels = 3;
+			fmt.depth = CV_8U;
+			fmt.bitsPerPixel = 24;
+			fmt.origin = 0;
+
+			pColorImage.reset(new Vision::Image(image->GetCols(), image->GetRows(), fmt, image->GetData()));
 			pColorImage->Mat().step = image->GetStride();
-			pColorImage->set_pixelFormat(Vision::Image::RGB);
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
@@ -554,9 +573,15 @@ void FlyCapture2FrameGrabber::onImageGrabbed(FlyCapture2::Image* image) const {
 			FlyCapture2::Image convertedImage;
 			image->Convert(PIXEL_FORMAT_BGR, &convertedImage);
 
-			pColorImage.reset(new Vision::Image( convertedImage.GetCols(), convertedImage.GetRows(), 3, convertedImage.GetData() ) );
+			Vision::Image::ImageFormatProperties fmt;
+			fmt.imageFormat = Vision::Image::BGR;
+			fmt.channels = 3;
+			fmt.depth = CV_8U;
+			fmt.bitsPerPixel = 24;
+			fmt.origin = 0;
+
+			pColorImage.reset(new Vision::Image(convertedImage.GetCols(), convertedImage.GetRows(), fmt, convertedImage.GetData()));
 			pColorImage->Mat().step = convertedImage.GetStride();
-			pColorImage->set_pixelFormat(Vision::Image::BGR);
 
 			pColorImage = m_undistorter->undistort( pColorImage );
 
