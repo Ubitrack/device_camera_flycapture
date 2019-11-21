@@ -12,6 +12,8 @@ conan_basic_setup(TARGETS)
 include(GNUInstallDirs)
 include(cmake/UbitrackConfig)
 
+option(WITH_OPENCL "Enable OpenCL support" ON)
+
 # External Libraries (could this be solved with conan dependencies ??)
 
 # OpenGL
@@ -22,14 +24,16 @@ IF(OpenGL_FOUND)
   MESSAGE(STATUS "Found OpenGL: ${OpenGL_INCLUDE_DIR} - ${OpenGL_LIBRARIES}")
 ENDIF(OpenGL_FOUND)
 
-# OpenCL
-SET(HAVE_OPENCL 0)
-find_package(OpenCL)
-IF(OpenCL_FOUND)
-  include_directories(${OpenCL_INCLUDE_DIR})
-  SET(HAVE_OPENCL 1)
-  MESSAGE(STATUS "Found OpenCL: ${OpenCL_INCLUDE_DIR} - ${OpenCL_LIBRARY}")
-ENDIF(OpenCL_FOUND)
+if(WITH_OPENCL)
+	# OpenCL
+	SET(HAVE_OPENCL 0)
+	find_package(OpenCL)
+	IF(OpenCL_FOUND)
+	  include_directories(${OpenCL_INCLUDE_DIR})
+	  SET(HAVE_OPENCL 1)
+	  MESSAGE(STATUS "Found OpenCL: ${OpenCL_INCLUDE_DIR} - ${OpenCL_LIBRARY}")
+	ENDIF(OpenCL_FOUND)
+endif()
 
 FIND_PACKAGE(Flycapture)
 

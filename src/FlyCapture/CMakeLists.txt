@@ -9,16 +9,21 @@ foreach(fpath ${UBITRACK_SRCS})
 
   add_library(${UBITRACK_LIBRARY_NAME} SHARED ${fpath})
 
-  target_link_libraries(${UBITRACK_LIBRARY_NAME} 
+  target_link_libraries(${UBITRACK_LIBRARY_NAME} PUBLIC
       CONAN_PKG::ubitrack_core
       CONAN_PKG::ubitrack_vision
       CONAN_PKG::ubitrack_dataflow
       OpenGL::GL
       OpenGL::GLU
-      OpenCL::OpenCL
        ${UBITRACK_EXTRA_LIBS}
       )
 
+  if(WITH_OPENCL)
+    target_link_libraries(${UBITRACK_LIBRARY_NAME} PUBLIC
+        OpenCL::OpenCL
+    )
+  endif()
+  
   target_include_directories(${UBITRACK_LIBRARY_NAME} PRIVATE
     ${FLYCAPTURE_INCLUDE_DIRS}
     )
